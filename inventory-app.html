@@ -721,26 +721,99 @@
   // where window.storage doesn't exist. When it's missing, fall back to
   // the browser's own localStorage so the app still saves data on this device.
   if(typeof window.storage === 'undefined'){
-    window.storage = {
-      async get(key){
-        const raw = localStorage.getItem('tlm_' + key);
-        if(raw === null) throw new Error('Key not found: ' + key);
-        return { key, value: raw, shared: false };
-      },
-      async set(key, value){
-        localStorage.setItem('tlm_' + key, value);
-        return { key, value, shared: false };
-      },
-      async delete(key){
-        localStorage.removeItem('tlm_' + key);
-        return { key, deleted: true, shared: false };
-      },
-      async list(prefix){
-        const p = 'tlm_' + (prefix || '');
-        const keys = Object.keys(localStorage).filter(k => k.startsWith(p)).map(k => k.slice(4));
-        return { keys, prefix, shared: false };
+  const SUPABASE_URL = 'https://dfusszxejwlszhzutczg.supabase.co';
+  const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_QYfqF9XKQbCu4wpZVvyR-Q_-w1-pD3_';
+
+  const supabaseReady = new Promise((resolve, reject) => {
+    if(window.supabase && window.supabase.createClient){
+      resolve(window.supabase.createClient(
+        SUPABASE_URL,
+        SUPABASE_PUBLISHABLE_KEY,
+        { auth: { persistSession: false } }
+      ));
+      return;
+    }
+
+    const script = document.createElement('script');
+    script.src = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2';
+    script.onload = () => {
+      if(!window.supabase || !window.supabase.createClient){
+        reject(new Error('Supabase library failed to load'));
+        return;
       }
+
+      resolve(window.supabase.createClient(
+        SUPABASE_URL,
+        SUPABASE_PUBLISHABLE_KEY,
+        { auth: { persistSession: false } }
+      ));
     };
+    script.onerror = () => reject(new Error('Could not load Supabase'));
+    document.head.appendChild(script);
+  });
+
+  window.storage = {
+    async get(key){
+      const supabase = await supabaseReady;
+
+      const { data, error } = await supabase
+        .from('app_storage')
+        .select('value')
+        .eq('key', key)
+        .maybeSingle();
+
+      if(error) throw error;
+      if(!data) throw new Error('Key not found: ' + key);
+
+      return { key, value: data.value, shared: true };
+    },
+
+    async set(key, value){
+      const supabase = await supabaseReady;
+
+      const { error } = await supabase
+        .from('app_storage')
+        .upsert(
+          { key, value, updated_at: new Date().toISOString() },
+          { onConflict: 'key' }
+        );
+
+      if(error) throw error;
+
+      return { key, value, shared: true };
+    },
+
+    async delete(key){
+      const supabase = await supabaseReady;
+
+      const { error } = await supabase
+        .from('app_storage')
+        .delete()
+        .eq('key', key);
+
+      if(error) throw error;
+
+      return { key, deleted: true, shared: true };
+    },
+
+    async list(prefix){
+      const supabase = await supabaseReady;
+
+      const { data, error } = await supabase
+        .from('app_storage')
+        .select('key');
+
+      if(error) throw error;
+
+      const p = prefix || '';
+      const keys = (data || [])
+        .map(row => row.key)
+        .filter(key => key.startsWith(p));
+
+      return { keys, prefix, shared: true };
+    }
+  };
+}
   }
 
   // ---------- State ----------
