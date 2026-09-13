@@ -1,13 +1,24 @@
 {
-  "background_color": "#ffa662",
-  "dir": "ltr",
-  "display": "standalone",
   "name": "TravelLikesMe",
-  "orientation": "any",
-  "scope": "/",
   "short_name": "TLM Stock",
-  "start_url": "/",
-  "theme_color": "#ffffff",
   "description": "TLM Inventory Management App",
-  "id": "tlm_inventory"
+  "id": "/inventory-app/",
+  "start_url": "/inventory-app/inventory-app.html",
+  "scope": "/inventory-app/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#ffa662",
+  "theme_color": "#ffffff",
+  "icons": [
+    {
+      "src": "/inventory-app/192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/inventory-app/512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
 }
