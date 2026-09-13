@@ -1,0 +1,13 @@
+{
+  "background_color": "#ffa662",
+  "dir": "ltr",
+  "display": "standalone",
+  "name": "TravelLikesMe",
+  "orientation": "any",
+  "scope": "/",
+  "short_name": "TLM Stock",
+  "start_url": "/",
+  "theme_color": "#ffffff",
+  "description": "TLM Inventory Management App",
+  "id": "tlm_inventory"
+}
