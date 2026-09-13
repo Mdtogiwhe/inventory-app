@@ -916,7 +916,7 @@
       if(lb) lastBackupTs = JSON.parse(lb.value);
     }catch(e){ lastBackupTs = null; }
   }
-  async function saveProducts(){ try{ await window.storage.set('products', JSON.stringify(products), false); }catch(e){ showToast("Couldn't save — try again", true); } }
+  async function saveProducts(){ try{ await window.storage.set('products', JSON.stringify(products), false); showToast("CLOUD SAVE OK"); }catch(e){ console.error(e); showToast("CLOUD ERROR: " + (e.message || e), true); } }
   async function savePlatforms(){ try{ await window.storage.set('platforms', JSON.stringify(platforms), false); }catch(e){ showToast("Couldn't save — try again", true); } }
   async function saveLog(){ try{ await window.storage.set('sales-log', JSON.stringify(salesLog), false); }catch(e){ /* non-fatal */ } }
   async function saveSlackConfig(){ try{ await window.storage.set('slack-config', JSON.stringify(slackConfig), false); }catch(e){ showToast("Couldn't save Slack settings"); } }
