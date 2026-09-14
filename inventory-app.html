@@ -949,16 +949,25 @@
 
   // ---------- Navigation ----------
   function goTo(screen){
-    currentScreen = screen;
-    document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
-    document.getElementById('screen-'+screen).classList.add('active');
-    document.querySelectorAll('.tab-btn').forEach(b=>b.classList.toggle('active', b.dataset.screen===screen));
-    document.getElementById('platformSelectWrap').style.display = (screen==='scan' && scanMode==='sale') ? '' : 'none';
-    document.getElementById('inwardReasonWrap').style.display = (screen==='scan' && scanMode==='inward') ? '' : 'none';
-    if(screen !== 'scan') stopScanning();
-    if(screen === 'add') stopAddScanning();
-    render();
+  currentScreen = screen;
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+  document.getElementById('screen-'+screen).classList.add('active');
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.toggle('active', b.dataset.screen===screen));
+  document.getElementById('platformSelectWrap').style.display = (screen==='scan' && scanMode==='sale') ? '' : 'none';
+  document.getElementById('inwardReasonWrap').style.display = (screen==='scan' && scanMode==='inward') ? '' : 'none';
+
+  if(screen !== 'scan') stopScanning();
+  if(screen === 'add') stopAddScanning();
+
+  render();
+
+  if(screen === 'scan'){
+    setTimeout(()=>{
+      const input = document.getElementById('manualBarcode');
+      if(input) input.focus();
+    }, 100);
   }
+}
   document.querySelectorAll('.tab-btn').forEach(b=>{
     b.addEventListener('click', ()=> goTo(b.dataset.screen));
   });
@@ -1055,15 +1064,37 @@
   startBtn.addEventListener('click', startScanning);
   stopBtn.addEventListener('click', stopScanning);
 
-  document.getElementById('manualLookupBtn').addEventListener('click', ()=>{
-    const v = document.getElementById('manualBarcode').value.trim();
+  document.getElementById('manualLookupBtn').addEventListener('click', async ()=>{
+  const input = document.getElementById('manualBarcode');
+  const v = input.value.trim();
+
+  if(!v) return;
+
+  input.value = '';
+  await lookupBarcode(v);
+
+  setTimeout(()=>{
+    input.focus();
+  }, 50);
+});
+
+document.getElementById('manualBarcode').addEventListener('keydown', async e=>{
+  if(e.key === 'Enter'){
+    e.preventDefault();
+
+    const input = document.getElementById('manualBarcode');
+    const v = input.value.trim();
+
     if(!v) return;
-    lookupBarcode(v);
-    document.getElementById('manualBarcode').value = '';
-  });
-  document.getElementById('manualBarcode').addEventListener('keydown', e=>{
-    if(e.key === 'Enter') document.getElementById('manualLookupBtn').click();
-  });
+
+    input.value = '';
+    await lookupBarcode(v);
+
+    setTimeout(()=>{
+      input.focus();
+    }, 50);
+  }
+});
 
     let scanItems = [];
   let scanEventBusy = false;
