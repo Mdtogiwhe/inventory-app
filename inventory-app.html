@@ -1034,11 +1034,24 @@
     startBtn.style.display = '';
     stopBtn.style.display = 'none';
   }
-  function onScanSuccess(decodedText){
-    if(navigator.vibrate) navigator.vibrate(60);
-    stopScanning();
-    lookupBarcode(decodedText.trim());
+  async function onScanSuccess(decodedText){
+  if(scanEventBusy) return;
+
+  scanEventBusy = true;
+
+  if(navigator.vibrate) navigator.vibrate(60);
+
+  try{
+    await lookupBarcode(decodedText.trim());
+  }catch(e){
+    console.error(e);
+    showToast("Scan error — please try again", true);
   }
+
+  setTimeout(()=>{
+    scanEventBusy = false;
+  }, 800);
+}
   startBtn.addEventListener('click', startScanning);
   stopBtn.addEventListener('click', stopScanning);
 
@@ -1052,126 +1065,307 @@
     if(e.key === 'Enter') document.getElementById('manualLookupBtn').click();
   });
 
-  function lookupBarcode(code){
+    let scanItems = [];
+  let scanEventBusy = false;
+
+  function renderScanList(message = ''){
     const area = document.getElementById('scanResultArea');
-    if(!isValidEAN13(code)){
-      pendingProduct = null;
-      area.innerHTML = `
-        <div class="not-found">
-          <h3>Not a valid barcode</h3>
-          <p>Only 13-digit EAN barcodes are supported. "${escapeHtml(code)}" doesn't match.</p>
-        </div>`;
+
+    if(!scanItems.length && !message){
+      area.innerHTML = '';
       return;
     }
-    const product = products.find(p => p.barcode === code);
-    if(product){
-      pendingProduct = product;
-      pendingQty = 1;
-      renderResultCard();
-    }else{
-      pendingProduct = null;
-      area.innerHTML = `
+
+    const isInward = scanMode === 'inward';
+    const totalUnits = scanItems.reduce((sum,item)=>sum + item.qty, 0);
+
+    let html = '';
+
+    if(scanItems.length){
+      html += `
+        <div class="section-title" style="margin-top:14px;">
+          Scanned Products · ${totalUnits} units
+        </div>
+      `;
+
+      html += scanItems.map(item=>{
+        const p = products.find(x=>x.id === item.productId);
+        if(!p) return '';
+
+        return `
+          <div class="result-card" style="padding:13px 14px; margin-top:8px;">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;">
+              <div style="min-width:0;">
+                <span class="barcode-tag mono">${escapeHtml(p.barcode)}</span>
+                <h3 style="font-size:15px;margin:2px 0 3px;">
+                  ${escapeHtml(p.name)}
+                </h3>
+                <div class="stock-line" style="margin-bottom:0;">
+                  ${p.stock} currently in stock
+                </div>
+              </div>
+
+              <button
+                class="btn btn-danger btn-sm remove-scan-btn"
+                data-id="${item.id}"
+                style="width:auto;flex-shrink:0;">
+                Remove
+              </button>
+            </div>
+
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-top:12px;">
+              <div style="font-size:12px;color:var(--muted);">
+                ${isInward
+                  ? escapeHtml(item.reason || 'Inward')
+                  : escapeHtml(item.platform || 'Sale')}
+              </div>
+
+              ${
+                isInward
+                ? `
+                  <div class="qty-stepper" style="margin:0;gap:10px;">
+                    <button class="scan-qty-minus" data-id="${item.id}">−</button>
+                    <div class="qty-num">${item.qty}</div>
+                    <button class="scan-qty-plus" data-id="${item.id}">+</button>
+                  </div>
+                `
+                : `
+                  <div style="font-family:'IBM Plex Mono',monospace;font-size:18px;font-weight:700;">
+                    ×${item.qty}
+                  </div>
+                `
+              }
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    if(message){
+      html += `
         <div class="not-found">
-          <h3>No product matches "${escapeHtml(code)}"</h3>
-          <p>Add it now so future scans on any platform recognise it.</p>
-          <button class="btn btn-amber btn-sm" id="goAddFromScan">Add this product</button>
-        </div>`;
+          <h3>${escapeHtml(message.title)}</h3>
+          <p>${escapeHtml(message.text)}</p>
+          ${
+            message.code
+            ? `<button class="btn btn-amber btn-sm" id="goAddFromScan">
+                Add this product
+              </button>`
+            : ''
+          }
+        </div>
+      `;
+    }
+
+    area.innerHTML = html;
+
+    area.querySelectorAll('.remove-scan-btn').forEach(btn=>{
+      btn.addEventListener('click', ()=>{
+        removeScannedItem(btn.dataset.id);
+      });
+    });
+
+    area.querySelectorAll('.scan-qty-plus').forEach(btn=>{
+      btn.addEventListener('click', ()=>{
+        changeScanItemQty(btn.dataset.id, 1);
+      });
+    });
+
+    area.querySelectorAll('.scan-qty-minus').forEach(btn=>{
+      btn.addEventListener('click', ()=>{
+        changeScanItemQty(btn.dataset.id, -1);
+      });
+    });
+
+    if(message && message.code){
       document.getElementById('goAddFromScan').addEventListener('click', ()=>{
         goTo('add');
-        document.getElementById('addBarcode').value = code;
+        document.getElementById('addBarcode').value = message.code;
       });
     }
   }
 
-  function renderResultCard(){
-    const area = document.getElementById('scanResultArea');
-    const p = pendingProduct;
-    const isInward = scanMode === 'inward';
-    const actionLabel = isInward
-      ? `Confirm restock via ${escapeHtml(document.getElementById('reasonSelect').value)}`
-      : `Confirm sale on ${escapeHtml(document.getElementById('platformSelect').value)}`;
-    area.innerHTML = `
-      <div class="result-card">
-        <span class="barcode-tag mono">${escapeHtml(p.barcode)}</span>
-        <h3>${escapeHtml(p.name)}</h3>
-        <div class="stock-line"><b>${p.stock}</b> currently in stock</div>
-        <div class="qty-stepper">
-          <button id="qtyMinus">−</button>
-          <input type="text" inputmode="numeric" pattern="[0-9]*" class="qty-num-input mono" id="qtyNum" value="${pendingQty}">
-          <button id="qtyPlus">+</button>
-        </div>
-        <button class="btn ${isInward?'btn-green':'btn-amber'}" id="confirmSaleBtn">${actionLabel}</button>
-      </div>`;
-    const qtyInput = document.getElementById('qtyNum');
-    document.getElementById('qtyMinus').addEventListener('click', ()=>{
-      if(pendingQty > 1){ pendingQty--; qtyInput.value = pendingQty; }
-    });
-    document.getElementById('qtyPlus').addEventListener('click', ()=>{
-      if(isInward){
-        pendingQty++; qtyInput.value = pendingQty;
-      }else if(pendingQty < p.stock){
-        pendingQty++; qtyInput.value = pendingQty;
-      }else{
-        showToast("Only "+p.stock+" left in stock");
-      }
-    });
-    qtyInput.addEventListener('input', ()=>{
-      qtyInput.value = qtyInput.value.replace(/[^0-9]/g, '');
-    });
-    qtyInput.addEventListener('change', ()=>{
-      let val = parseInt(qtyInput.value, 10);
-      if(isNaN(val) || val < 1) val = 1;
-      if(!isInward && val > p.stock){
-        val = p.stock;
-        showToast("Only "+p.stock+" left in stock");
-      }
-      pendingQty = val;
-      qtyInput.value = pendingQty;
-    });
-    qtyInput.addEventListener('blur', ()=>{
-      if(!qtyInput.value){ qtyInput.value = pendingQty; }
-    });
-    document.getElementById('confirmSaleBtn').addEventListener('click', confirmAction);
+  async function lookupBarcode(code){
+    code = String(code || '').trim();
+
+    if(!isValidEAN13(code)){
+      renderScanList({
+        title: 'Not a valid barcode',
+        text: `Only 13-digit EAN barcodes are supported. "${code}" doesn't match.`
+      });
+      return;
+    }
+
+    const product = products.find(p => p.barcode === code);
+
+    if(!product){
+      renderScanList({
+        title: `No product matches "${code}"`,
+        text: 'Add it now so future scans on any platform recognise it.',
+        code
+      });
+      return;
+    }
+
+    await addScannedProduct(product);
   }
 
-  async function confirmAction(){
-    if(!pendingProduct) return;
-    const p = products.find(x=>x.id === pendingProduct.id);
-    if(!p) return;
+  async function addScannedProduct(product){
     const isInward = scanMode === 'inward';
+
+    if(!isInward && product.stock <= 0){
+      showToast(`${product.name} is out of stock`);
+      return;
+    }
+
+    const platform = isInward
+      ? null
+      : document.getElementById('platformSelect').value;
+
+    const reason = isInward
+      ? document.getElementById('reasonSelect').value
+      : null;
+
+    const platformMatch = isInward && reason && reason.startsWith('Return – ')
+      ? reason.replace('Return – ','')
+      : null;
+
+    let item = scanItems.find(x =>
+      x.productId === product.id &&
+      x.mode === scanMode &&
+      x.platform === platform &&
+      x.reason === reason
+    );
+
+    if(item){
+      item.qty += 1;
+
+      const log = salesLog.find(l => l.id === item.logId);
+      if(log) log.qty = item.qty;
+    }else{
+      const logId = uid();
+
+      const logEntry = {
+        id: logId,
+        barcode: product.barcode,
+        name: product.name,
+        type: isInward ? 'inward' : 'sale',
+        reason: reason,
+        platform: isInward ? platformMatch : platform,
+        qty: 1,
+        ts: Date.now()
+      };
+
+      salesLog.unshift(logEntry);
+
+      item = {
+        id: uid(),
+        productId: product.id,
+        qty: 1,
+        mode: scanMode,
+        platform,
+        reason,
+        logId
+      };
+
+      scanItems.push(item);
+    }
+
+    const wasAboveThreshold = product.stock > (product.threshold ?? 5);
 
     if(isInward){
-      const reason = document.getElementById('reasonSelect').value;
-      const platformMatch = reason.startsWith('Return – ') ? reason.replace('Return – ','') : null;
-      p.stock = p.stock + pendingQty;
-      await saveProducts();
-      salesLog.unshift({ id: uid(), barcode: p.barcode, name: p.name, type: 'inward', reason, platform: platformMatch, qty: pendingQty, ts: Date.now() });
-      await saveLog();
-      showToast(`Restocked: +${pendingQty} × ${p.name} (${reason})`);
+      product.stock += 1;
+    }else{
+      product.stock = Math.max(0, product.stock - 1);
+    }
+
+    await saveProducts();
+    await saveLog();
+
+    if(isInward){
+      showToast(`+1 × ${product.name}`);
+      
       if(slackConfig.notifyInward){
-        sendSlackMessage(`📦 *+${pendingQty} × ${p.name}* restocked — ${reason}. Now *${p.stock}* in stock.`);
+        sendSlackMessage(
+          `📦 *+1 × ${product.name}* restocked — ${reason}. Now *${product.stock}* in stock.`
+        );
       }
     }else{
-      const platform = document.getElementById('platformSelect').value;
-      const wasAboveThreshold = p.stock > (p.threshold ?? 5);
-      p.stock = Math.max(0, p.stock - pendingQty);
-      await saveProducts();
-      salesLog.unshift({ id: uid(), barcode: p.barcode, name: p.name, type: 'sale', platform, qty: pendingQty, ts: Date.now() });
-      await saveLog();
-      showToast(`Logged: ${pendingQty} × ${p.name} sold on ${platform}`);
+      showToast(`1 × ${product.name} sold`);
+
       if(slackConfig.notifySale){
-        sendSlackMessage(`🛒 *${pendingQty} × ${p.name}* sold on *${platform}*. ${p.stock} left.`);
+        sendSlackMessage(
+          `🛒 *1 × ${product.name}* sold on *${platform}*. ${product.stock} left.`
+        );
       }
-      const nowLow = p.stock <= (p.threshold ?? 5);
-      if(slackConfig.notifyLowStock && wasAboveThreshold && nowLow){
-        sendSlackMessage(`⚠️ *Low stock:* ${p.name} (${p.barcode}) has only *${p.stock}* left.`);
+
+      const nowLow = product.stock <= (product.threshold ?? 5);
+
+      if(
+        slackConfig.notifyLowStock &&
+        wasAboveThreshold &&
+        nowLow
+      ){
+        sendSlackMessage(
+          `⚠️ *Low stock:* ${product.name} (${product.barcode}) has only *${product.stock}* left.`
+        );
       }
     }
-    document.getElementById('scanResultArea').innerHTML = '';
-    pendingProduct = null;
-    render();
+
+    renderScanList();
+    renderTodaySummary();
   }
 
+  async function changeScanItemQty(itemId, delta){
+    const item = scanItems.find(x=>x.id === itemId);
+    if(!item) return;
+
+    const product = products.find(p=>p.id === item.productId);
+    if(!product) return;
+
+    if(scanMode !== 'inward') return;
+
+    if(delta < 0 && item.qty <= 1) return;
+
+    item.qty += delta;
+    product.stock += delta;
+
+    const log = salesLog.find(l=>l.id === item.logId);
+    if(log) log.qty = item.qty;
+
+    await saveProducts();
+    await saveLog();
+
+    renderScanList();
+    renderTodaySummary();
+  }
+
+  async function removeScannedItem(itemId){
+    const itemIndex = scanItems.findIndex(x=>x.id === itemId);
+    if(itemIndex === -1) return;
+
+    const item = scanItems[itemIndex];
+    const product = products.find(p=>p.id === item.productId);
+
+    if(product){
+      if(item.mode === 'inward'){
+        product.stock = Math.max(0, product.stock - item.qty);
+      }else{
+        product.stock += item.qty;
+      }
+    }
+
+    salesLog = salesLog.filter(l=>l.id !== item.logId);
+    scanItems.splice(itemIndex, 1);
+
+    await saveProducts();
+    await saveLog();
+
+    renderScanList();
+    renderTodaySummary();
+
+    showToast(`${product ? product.name : 'Product'} removed`);
+  }
   // ---------- Today summary ----------
   function renderTodaySummary(){
     const startOfDay = new Date(); startOfDay.setHours(0,0,0,0);
