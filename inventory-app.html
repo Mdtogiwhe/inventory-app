@@ -1334,7 +1334,7 @@ const reason = scanMode === 'return'
         name: product.name,
         type: scanMode === 'return' ? 'return' : (isInward ? 'inward' : 'sale'),
         reason: reason,
-        platform: isInward ? platformMatch : platform,
+        platform: platform,
         qty: isInward ? 0 : 1,
         ts: Date.now()
       };
