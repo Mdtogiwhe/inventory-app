@@ -884,6 +884,14 @@
     const buf = await crypto.subtle.digest('SHA-256', enc);
     return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
   }
+  function escapeHtml(value){
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
   let scanMode = "sale"; // "sale" | "inward"
   let slackConfig = { webhookUrl: "", notifySale: false, notifyInward: false, notifyLowStock: false };
 
