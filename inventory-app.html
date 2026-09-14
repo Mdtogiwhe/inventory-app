@@ -1577,7 +1577,7 @@ item.added = true;
           <div class="ltime">${time}</div>
           <span class="log-tag">${escapeHtml(tag)}</span>
         </div>
-        <div class="log-qty ${isInward?'in':''}">${isInward?'+':'−'}${l.qty}</div>
+       <div class="log-qty ${isInward || l.type === 'return' ? 'in' : ''}">${isInward || l.type === 'return' ? '+' : '−'}${l.qty}</div>
       </div>`;
     }).join('');
   }
