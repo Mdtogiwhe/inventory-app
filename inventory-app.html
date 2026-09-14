@@ -1404,29 +1404,29 @@ added: false
     renderTodaySummary();
   }
 
-  async function changeScanItemQty(itemId, delta){
-    const item = scanItems.find(x=>x.id === itemId);
-    if(!item) return;
+  function changeScanItemQty(itemId, delta){
+  const item = scanItems.find(x => x.id === itemId);
+  if(!item) return;
 
-    const product = products.find(p=>p.id === item.productId);
-    if(!product) return;
+  const product = products.find(p => p.id === item.productId);
+  if(!product) return;
 
-    if(scanMode !== 'inward') return;
+  if(scanMode !== 'inward') return;
 
-    if(delta < 0 && item.qty <= 1) return;
+  if(delta < 0 && item.qty <= 1) return;
 
-    item.qty += delta;
-    product.stock += delta;
+  item.qty += delta;
+  product.stock += delta;
 
-    const log = salesLog.find(l=>l.id === item.logId);
-    if(log) log.qty = item.qty;
+  const log = salesLog.find(l => l.id === item.logId);
+  if(log) log.qty = item.qty;
 
-    await saveProducts();
-    await saveLog();
+  saveProducts();
+  saveLog();
 
-    renderScanList();
-    renderTodaySummary();
-  }
+  renderScanList();
+  renderTodaySummary();
+}
 async function addInwardQuantity(itemId, qty){
   const item = scanItems.find(x => x.id === itemId);
   if(!item) return;
