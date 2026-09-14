@@ -472,9 +472,10 @@
     <!-- SCAN SCREEN -->
     <section class="screen active" id="screen-scan">
       <div class="mode-toggle" id="modeToggle">
-        <button class="mode-btn active" data-mode="sale">Sale</button>
-        <button class="mode-btn" data-mode="inward">Inward / Return</button>
-      </div>
+  <button class="mode-btn active" data-mode="sale">Sale</button>
+  <button class="mode-btn" data-mode="return">Return</button>
+  <button class="mode-btn" data-mode="inward">Inward</button>
+</div>
       <div class="scan-stage">
         <div class="field" id="inwardReasonWrap" style="display:none; margin-bottom:14px;">
           <label for="reasonSelect">Restocking via</label>
@@ -993,19 +994,29 @@
   }
 
   document.querySelectorAll('.mode-btn').forEach(btn=>{
-    btn.addEventListener('click', ()=>{
-      scanMode = btn.dataset.mode;
-      document.querySelectorAll('.mode-btn').forEach(b=>{
-        b.classList.remove('active','inward-active');
-      });
-      btn.classList.add(scanMode === 'inward' ? 'inward-active' : 'active');
-      document.getElementById('platformSelectWrap').style.display = (scanMode === 'sale') ? '' : 'none';
-      document.getElementById('inwardReasonWrap').style.display = (scanMode === 'inward') ? '' : 'none';
-      document.getElementById('scanResultArea').innerHTML = '';
-      pendingProduct = null;
-      render();
+  btn.addEventListener('click', ()=>{
+    scanMode = btn.dataset.mode;
+
+    document.querySelectorAll('.mode-btn').forEach(b=>{
+      b.classList.remove('active','inward-active');
     });
+
+    btn.classList.add(
+      scanMode === 'inward' ? 'inward-active' : 'active'
+    );
+
+    document.getElementById('platformSelectWrap').style.display =
+      (scanMode === 'sale') ? '' : 'none';
+
+    document.getElementById('inwardReasonWrap').style.display =
+      (scanMode === 'inward') ? '' : 'none';
+
+    document.getElementById('scanResultArea').innerHTML = '';
+    pendingProduct = null;
+
+    render();
   });
+});
 
   // ---------- Scan screen ----------
   function isValidEAN13(code){ return /^\d{13}$/.test(code); }
@@ -1154,11 +1165,23 @@ document.getElementById('manualBarcode').addEventListener('keydown', async e=>{
               ${
                 isInward
                 ? `
-                  <div class="qty-stepper" style="margin:0;gap:10px;">
-                    <button class="scan-qty-minus" data-id="${item.id}">−</button>
-                    <div class="qty-num">${item.qty}</div>
-                    <button class="scan-qty-plus" data-id="${item.id}">+</button>
-                  </div>
+                  <div style="display:flex;align-items:center;gap:8px;">
+  <input
+    type="number"
+    min="1"
+    inputmode="numeric"
+    class="qty-num-input scan-qty-input"
+    data-id="${item.id}"
+    value="${item.qty}"
+    style="width:90px;"
+  >
+  <button
+    class="btn btn-amber btn-sm scan-add-qty"
+    data-id="${item.id}"
+    style="width:auto;">
+    Add
+  </button>
+</div>
                 `
                 : `
                   <div style="font-family:'IBM Plex Mono',monospace;font-size:18px;font-weight:700;">
@@ -1196,17 +1219,24 @@ document.getElementById('manualBarcode').addEventListener('keydown', async e=>{
       });
     });
 
-    area.querySelectorAll('.scan-qty-plus').forEach(btn=>{
-      btn.addEventListener('click', ()=>{
-        changeScanItemQty(btn.dataset.id, 1);
-      });
-    });
+    area.querySelectorAll('.scan-add-qty').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    const input = area.querySelector(
+      `.scan-qty-input[data-id="${btn.dataset.id}"]`
+    );
 
-    area.querySelectorAll('.scan-qty-minus').forEach(btn=>{
-      btn.addEventListener('click', ()=>{
-        changeScanItemQty(btn.dataset.id, -1);
-      });
-    });
+    if(!input) return;
+
+    let qty = parseInt(input.value, 10);
+
+    if(isNaN(qty) || qty < 1){
+      qty = 1;
+      input.value = 1;
+    }
+
+    addInwardQuantity(btn.dataset.id, qty);
+  });
+});
 
     if(message && message.code){
       document.getElementById('goAddFromScan').addEventListener('click', ()=>{
@@ -1269,10 +1299,12 @@ document.getElementById('manualBarcode').addEventListener('keydown', async e=>{
     );
 
     if(item){
-      item.qty += 1;
+      if(scanMode !== 'inward'){
+  item.qty += 1;
 
-      const log = salesLog.find(l => l.id === item.logId);
-      if(log) log.qty = item.qty;
+  const log = salesLog.find(l => l.id === item.logId);
+  if(log) log.qty = item.qty;
+}
     }else{
       const logId = uid();
 
@@ -1280,10 +1312,10 @@ document.getElementById('manualBarcode').addEventListener('keydown', async e=>{
         id: logId,
         barcode: product.barcode,
         name: product.name,
-        type: isInward ? 'inward' : 'sale',
+        type: scanMode === 'return' ? 'return' : (isInward ? 'inward' : 'sale'),
         reason: reason,
         platform: isInward ? platformMatch : platform,
-        qty: 1,
+        qty: isInward ? 0 : 1,
         ts: Date.now()
       };
 
@@ -1297,6 +1329,8 @@ document.getElementById('manualBarcode').addEventListener('keydown', async e=>{
         platform,
         reason,
         logId
+        addedQty: 0,
+added: false,
       };
 
       scanItems.push(item);
@@ -1304,7 +1338,7 @@ document.getElementById('manualBarcode').addEventListener('keydown', async e=>{
 
     const wasAboveThreshold = product.stock > (product.threshold ?? 5);
 
-    if(isInward){
+    if(scanMode === 'return'){
       product.stock += 1;
     }else{
       product.stock = Math.max(0, product.stock - 1);
@@ -1370,7 +1404,45 @@ document.getElementById('manualBarcode').addEventListener('keydown', async e=>{
     renderScanList();
     renderTodaySummary();
   }
+async function addInwardQuantity(itemId, qty){
+  const item = scanItems.find(x => x.id === itemId);
+  if(!item) return;
 
+  const product = products.find(p => p.id === item.productId);
+  if(!product) return;
+
+  if(item.mode !== 'inward') return;
+
+  qty = parseInt(qty, 10);
+
+  if(isNaN(qty) || qty < 1){
+    showToast('Enter a valid quantity', true);
+    return;
+  }
+
+  const previousQty = item.addedQty || 0;
+const newQty = qty;
+const delta = newQty - previousQty;
+
+product.stock += delta;
+
+item.qty = newQty;
+item.addedQty = newQty;
+item.added = true;
+
+  const log = salesLog.find(l => l.id === item.logId);
+  if(log){
+    log.qty = qty;
+  }
+
+  await saveProducts();
+  await saveLog();
+
+  showToast(`+${qty} × ${product.name} added to stock`);
+
+  renderScanList();
+  renderTodaySummary();
+}
   async function removeScannedItem(itemId){
     const itemIndex = scanItems.findIndex(x=>x.id === itemId);
     if(itemIndex === -1) return;
@@ -1379,10 +1451,13 @@ document.getElementById('manualBarcode').addEventListener('keydown', async e=>{
     const product = products.find(p=>p.id === item.productId);
 
     if(product){
-      if(item.mode === 'inward'){
-        product.stock = Math.max(0, product.stock - item.qty);
-      }else{
-        product.stock += item.qty;
+     if(item.mode === 'inward'){
+  if(item.added){
+    product.stock = Math.max(0, product.stock - item.qty);
+  }
+}else{
+  product.stock += item.qty;
+}
       }
     }
 
