@@ -1505,7 +1505,7 @@ item.added = true;
   function renderTodaySummary(){
     const startOfDay = new Date(); startOfDay.setHours(0,0,0,0);
     const todays = salesLog.filter(l => l.ts >= startOfDay.getTime());
-    const sold = todays.filter(l=>l.type!=='inward');
+    const sold = todays.filter(l=>l.type==='sale');
     const inward = todays.filter(l=>l.type==='inward');
     const soldQty = sold.reduce((s,l)=>s+l.qty,0);
     const inwardQty = inward.reduce((s,l)=>s+l.qty,0);
@@ -1608,11 +1608,13 @@ item.added = true;
   }
   function renderReportStats(){
     const entries = reportEntries();
-    const sold = entries.filter(e=>e.type!=='inward');
-    const inward = entries.filter(e=>e.type==='inward');
-    const soldQty = sold.reduce((s,e)=>s+e.qty,0);
-    const newStockQty = inward.filter(e=>!e.platform).reduce((s,e)=>s+e.qty,0);
-    const returnsQty = inward.filter(e=>e.platform).reduce((s,e)=>s+e.qty,0);
+    const sold = entries.filter(e=>e.type==='sale');
+const inward = entries.filter(e=>e.type==='inward');
+const returns = entries.filter(e=>e.type==='return');
+
+const soldQty = sold.reduce((s,e)=>s+e.qty,0);
+const newStockQty = inward.reduce((s,e)=>s+e.qty,0);
+const returnsQty = returns.reduce((s,e)=>s+e.qty,0);
     const availableQty = products.reduce((s,p)=>s+p.stock,0);
     document.getElementById('reportStats').innerHTML = `
       <div class="stat-card"><div class="num mono">${soldQty}</div><div class="lbl">Units sold</div></div>
@@ -1622,7 +1624,7 @@ item.added = true;
     `;
   }
   function renderReportByPlatform(){
-    const entries = reportEntries().filter(e=>e.type!=='inward');
+    const entries = reportEntries().filter(e=>e.type==='sale');
     const byPlatform = {};
     entries.forEach(e=> byPlatform[e.platform] = (byPlatform[e.platform]||0) + e.qty);
     const rows = Object.entries(byPlatform).sort((a,b)=>b[1]-a[1]);
@@ -1638,7 +1640,7 @@ item.added = true;
       </div>`).join('');
   }
   function renderReportTopProducts(){
-    const entries = reportEntries().filter(e=>e.type!=='inward');
+    const entries = reportEntries().filter(e=>e.type==='sale');
     const byProduct = {};
     entries.forEach(e=>{
       const key = e.barcode;
@@ -1677,7 +1679,8 @@ item.added = true;
       return [
         d.toLocaleDateString(),
         d.toLocaleTimeString(),
-        e.type === 'inward' ? 'Inward' : 'Sale',
+       e.type === 'inward' ? 'Inward' :
+e.type === 'return' ? 'Return' : 'Sale',
         e.name,
         e.barcode,
         e.type === 'inward' ? (e.reason||'') : (e.platform||''),
