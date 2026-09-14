@@ -981,17 +981,35 @@
     if(platforms.includes(prev)) sel.value = prev;
   }
 
-  function escapeHtml(s){
-    return String(s).replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+  function renderReasonSelect(){
+  const sel = document.getElementById('reasonSelect');
+  const wrap = document.getElementById('inwardReasonWrap');
+  const label = wrap ? wrap.querySelector('label') : null;
+  const prev = sel.value;
+
+  let options = [];
+
+  if(scanMode === 'inward'){
+    options = ['New stock (supplier)'];
+    if(label) label.textContent = 'Restocking via';
+  }else if(scanMode === 'return'){
+    options = platforms.map(p => `Return - ${p}`);
+    if(label) label.textContent = 'Return via';
+  }else{
+    sel.innerHTML = '';
+    return;
   }
 
-  function renderReasonSelect(){
-    const sel = document.getElementById('reasonSelect');
-    const prev = sel.value;
-    const options = ["New stock (supplier)", ...platforms.map(p=>`Return – ${p}`)];
-    sel.innerHTML = options.map(o=>`<option value="${escapeHtml(o)}">${escapeHtml(o)}</option>`).join('');
-    if(options.includes(prev)) sel.value = prev;
+  sel.innerHTML = options
+    .map(o => `<option value="${escapeHtml(o)}">${escapeHtml(o)}</option>`)
+    .join('');
+
+  if(options.includes(prev)){
+    sel.value = prev;
+  }else if(options.length){
+    sel.value = options[0];
   }
+}
 
   document.querySelectorAll('.mode-btn').forEach(btn=>{
   btn.addEventListener('click', ()=>{
@@ -1006,10 +1024,10 @@
     );
 
     document.getElementById('platformSelectWrap').style.display =
-      (scanMode === 'sale') ? '' : 'none';
+  (scanMode === 'sale') ? '' : 'none';
 
-    document.getElementById('inwardReasonWrap').style.display =
-      (scanMode === 'inward') ? '' : 'none';
+document.getElementById('inwardReasonWrap').style.display =
+  (scanMode === 'return' || scanMode === 'inward') ? '' : 'none';  
 
     document.getElementById('scanResultArea').innerHTML = '';
     pendingProduct = null;
@@ -1279,17 +1297,19 @@ document.getElementById('manualBarcode').addEventListener('keydown', async e=>{
       return;
     }
 
-    const platform = isInward
-      ? null
-      : document.getElementById('platformSelect').value;
+    const selectedReason = document.getElementById('reasonSelect').value;
 
-    const reason = isInward
-      ? document.getElementById('reasonSelect').value
-      : null;
+const platform = scanMode === 'sale'
+  ? document.getElementById('platformSelect').value
+  : scanMode === 'return'
+    ? selectedReason.replace('Return - ','')
+    : null;
 
-    const platformMatch = isInward && reason && reason.startsWith('Return – ')
-      ? reason.replace('Return – ','')
-      : null;
+const reason = scanMode === 'return'
+  ? selectedReason
+  : scanMode === 'inward'
+    ? 'New stock (supplier)'
+    : null;
 
     let item = scanItems.find(x =>
       x.productId === product.id &&
@@ -1324,7 +1344,7 @@ document.getElementById('manualBarcode').addEventListener('keydown', async e=>{
       item = {
         id: uid(),
         productId: product.id,
-        qty: 1,
+    qty: isInward ? 0 : 1,
         mode: scanMode,
         platform,
         reason,
@@ -1339,30 +1359,33 @@ added: false
     const wasAboveThreshold = product.stock > (product.threshold ?? 5);
 
     if(scanMode === 'return'){
-      product.stock += 1;
-    }else{
-      product.stock = Math.max(0, product.stock - 1);
-    }
+  product.stock += 1;
+}else if(scanMode === 'sale'){
+  product.stock = Math.max(0, product.stock - 1);
+}
 
     await saveProducts();
     await saveLog();
 
-    if(isInward){
-      showToast(`+1 × ${product.name}`);
-      
-      if(slackConfig.notifyInward){
-        sendSlackMessage(
-          `📦 *+1 × ${product.name}* restocked — ${reason}. Now *${product.stock}* in stock.`
-        );
-      }
-    }else{
-      showToast(`1 × ${product.name} sold`);
+   if(!isInward){
+  if(scanMode === 'return'){
+    showToast(`1 × ${product.name} returned`);
 
-      if(slackConfig.notifySale){
-        sendSlackMessage(
-          `🛒 *1 × ${product.name}* sold on *${platform}*. ${product.stock} left.`
-        );
-      }
+    if(slackConfig.notifySale){
+      sendSlackMessage(
+        `↩️ *1 × ${product.name}* returned via *${platform}*. Now *${product.stock}* in stock.`
+      );
+    }
+  }else{
+    showToast(`1 × ${product.name} sold`);
+
+    if(slackConfig.notifySale){
+      sendSlackMessage(
+        `🛒 *1 × ${product.name}* sold on *${platform}*. ${product.stock} left.`
+      );
+    }
+  }
+}
 
       const nowLow = product.stock <= (product.threshold ?? 5);
 
