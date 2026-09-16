@@ -1481,13 +1481,14 @@ item.added = true;
     const product = products.find(p=>p.id === item.productId);
 
     if(product){
-     if(item.mode === 'inward'){
+    if(item.mode === 'sale'){
+  product.stock += item.qty;
+}else if(item.mode === 'return'){
+  product.stock = Math.max(0, product.stock - item.qty);
+}else if(item.mode === 'inward'){
   if(item.added){
     product.stock = Math.max(0, product.stock - item.qty);
   }
-}else{
-  product.stock += item.qty;
-}
       }
     
     salesLog = salesLog.filter(l=>l.id !== item.logId);
