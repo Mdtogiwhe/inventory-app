@@ -1300,7 +1300,7 @@ document.getElementById('manualBarcode').addEventListener('keydown', async e=>{
   async function addScannedProduct(product){
     const isInward = scanMode === 'inward';
 
-    if(!isInward && product.stock <= 0){
+    if(scanMode === 'sale' && product.stock <= 0){
       showToast(`${product.name} is out of stock`);
       return;
     }
