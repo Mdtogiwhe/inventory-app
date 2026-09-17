@@ -1327,42 +1327,50 @@ const reason = scanMode === 'return'
     );
 
     if(item){
-      if(scanMode !== 'inward'){
-  item.qty += 1;
-
-  const log = salesLog.find(l => l.id === item.logId);
-  if(log) log.qty = item.qty;
-}
-    }else{
-      const logId = uid();
-
-      const logEntry = {
-        id: logId,
-        barcode: product.barcode,
-        name: product.name,
-        type: scanMode === 'return' ? 'return' : (isInward ? 'inward' : 'sale'),
-        reason: reason,
-        platform: platform,
-        qty: isInward ? 0 : 1,
-        ts: Date.now()
-      };
-
-      salesLog.unshift(logEntry);
-
-      item = {
-        id: uid(),
-        productId: product.id,
+  if(scanMode !== 'inward'){
+    item.qty += 1;
+  }
+}else{
+  item = {
+    id: uid(),
+    productId: product.id,
     qty: isInward ? 0 : 1,
-        mode: scanMode,
-        platform,
-        reason,
-      logId: logId,
-addedQty: 0,
-added: false
-      };
+    mode: scanMode,
+    platform,
+    reason,
+    logId: null,
+    addedQty: 0,
+    added: false
+  };
 
-      scanItems.push(item);
-    }
+  scanItems.push(item);
+}
+
+let log = item.logId
+  ? salesLog.find(l => l.id === item.logId)
+  : null;
+
+if(!log){
+  const logId = uid();
+
+  log = {
+    id: logId,
+    barcode: product.barcode,
+    name: product.name,
+    type: scanMode === 'return'
+      ? 'return'
+      : (isInward ? 'inward' : 'sale'),
+    reason: reason,
+    platform: platform,
+    qty: isInward ? 0 : item.qty,
+    ts: Date.now()
+  };
+
+  salesLog.unshift(log);
+  item.logId = logId;
+}else if(scanMode !== 'inward'){
+  log.qty = item.qty;
+}
 
     const wasAboveThreshold = product.stock > (product.threshold ?? 5);
 
