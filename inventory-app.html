@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <link rel="manifest" href="manifest.json">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
+<title>TLM Inventory Management</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<div id="app">
+
+  <div id="lockScreen" class="lock-overlay">
+    <div class="lock-card">
+      <div class="lock-icon">
+        <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>
+      </div>
+      <h1>TLM Inventory</h1>
+      <p class="lock-subtitle" id="lockSubtitle">Set a password to protect this app.</p>
+      <input type="email" id="lockEmailInput" placeholder="Email" autocomplete="off" style="margin-bottom:10px;">
+      <input type="password" id="lockPasswordInput" placeholder="Password" autocomplete="off">
+      <input type="password" id="lockPasswordConfirm" placeholder="Confirm password" autocomplete="off" style="margin-top:10px;">
+      <div class="hint" id="lockPasswordHint" style="text-align:left; margin-top:8px; display:none;"></div>
+      <button class="btn btn-amber" id="lockSubmitBtn" style="margin-top:14px;">Set password</button>
+      <div id="lockError"></div>
+      <button class="btn-link" id="forgotPasswordBtn">Forgot password?</button>
+    </div>
+  </div>
+
+
+  <header>
+    <div class="brand">
+      <h1>TLM Inventory</h1>
+      <span class="sub mono" id="skuCount">0 SKUs</span>
+    </div>
+    <div class="sub" id="headerSub">Scan on sale, stock stays honest.</div>
+    <div class="platform-select" id="platformSelectWrap">
+      <label for="platformSelect">Selling on</label>
+      <div class="select-wrap">
+        <select id="platformSelect"></select>
+      </div>
+    </div>
+  </header>
+
+  <main>
+
+    <!-- SCAN SCREEN -->
+    <section class="screen active" id="screen-scan">
+      <div class="mode-toggle" id="modeToggle">
+  <button class="mode-btn active" data-mode="sale">Sale</button>
+  <button class="mode-btn" data-mode="return">Return</button>
+  <button class="mode-btn" data-mode="inward">Inward</button>
+</div>
+      <div class="scan-stage">
+        <div class="field" id="inwardReasonWrap" style="display:none; margin-bottom:14px;">
+          <label for="reasonSelect">Restocking via</label>
+          <div class="select-wrap"><select id="reasonSelect"></select></div>
+        </div>
+        <div id="reader"></div>
+        <div class="scan-idle" id="scanIdle">
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3h-3zM19 14v3M14 19h5"/></svg>
+          <div>Point the camera at a barcode to log a sale.</div>
+        </div>
+        <div class="btn-row" style="margin-top:14px;">
+          <button class="btn btn-amber" id="startScanBtn">Start scanning</button>
+          <button class="btn btn-outline" id="stopScanBtn" style="display:none;">Stop</button>
+        </div>
+        <div class="manual-entry">
+          <input type="text" id="manualBarcode" placeholder="13-digit EAN barcode" inputmode="numeric" maxlength="13">
+          <button class="btn btn-ghost btn-sm" id="manualLookupBtn">Find</button>
+        </div>
+      </div>
+
+      <div id="scanResultArea"></div>
+
+      <div class="section-title">Today</div>
+      <div class="summary-row" id="todaySummary"></div>
+    </section>
+
+    <!-- INVENTORY SCREEN -->
+    <section class="screen" id="screen-inventory">
+      <div class="search-bar">
+        <input type="text" id="invSearch" placeholder="Search products or SKU">
+      </div>
+      <div id="lowStockBanner"></div>
+      <div class="section-title">All products</div>
+      <div id="inventoryList"></div>
+    </section>
+
+    <!-- LOG SCREEN -->
+    <section class="screen" id="screen-log">
+      <div class="filter-chips" id="logFilterChips"></div>
+      <div id="logList"></div>
+    </section>
+
+    <!-- PLATFORMS SCREEN -->
+    <section class="screen" id="screen-platforms">
+      <div class="section-title">Your platforms</div>
+      <div id="platformList"></div>
+      <div class="field" style="margin-top:16px;">
+        <label for="newPlatform">Add a platform</label>
+        <div class="inline-scan-btn">
+          <input type="text" id="newPlatform" placeholder="e.g. Meesho, Ajio, JioMart, Website">
+          <button class="btn btn-amber btn-sm" id="addPlatformBtn">Add</button>
+        </div>
+      </div>
+
+      <div class="section-title">Slack notifications</div>
+      <div class="field">
+        <label for="slackWebhook">Incoming Webhook URL</label>
+        <input type="text" id="slackWebhook" placeholder="https://hooks.slack.com/services/…">
+        <div class="hint">In Slack: create an app at api.slack.com/apps → Incoming Webhooks → Add New Webhook → pick a channel → paste the URL here.</div>
+      </div>
+      <label class="checkbox-row">
+        <input type="checkbox" id="notifySale"> Notify on each sale
+      </label>
+      <label class="checkbox-row">
+        <input type="checkbox" id="notifyInward"> Notify on each restock / return
+      </label>
+      <label class="checkbox-row">
+        <input type="checkbox" id="notifyLowStock"> Notify when a product goes low on stock
+      </label>
+      <div class="btn-row" style="margin-top:14px;">
+        <button class="btn btn-outline" id="testSlackBtn">Send test message</button>
+        <button class="btn btn-amber" id="saveSlackBtn">Save</button>
+      </div>
+      <div id="slackFeedback"></div>
+
+      <div class="section-title">Backup &amp; Restore</div>
+      <div class="hint" style="margin-bottom:12px;">Your data already saves automatically as you use the app. Export a backup file for extra safety, or to move everything to another device.</div>
+      <div class="btn-row">
+        <button class="btn btn-outline" id="exportBackupBtn">Export backup</button>
+        <button class="btn btn-amber" id="importBackupBtn">Import backup</button>
+      </div>
+      <input type="file" id="importBackupFile" accept="application/json" style="display:none;">
+      <div class="hint" id="lastBackupHint" style="margin-top:10px;"></div>
+      <div id="backupFeedback"></div>
+
+      <div class="btn-row" style="margin-top:16px;">
+        <button class="btn btn-danger" id="resetDataBtn">Reset inventory data</button>
+      </div>
+      <div class="hint" style="margin-top:8px;">Clears all products, stock, and sales/inward history so you can start fresh. Keeps your platforms, Slack settings, and logins as they are.</div>
+      <div id="resetDataFeedback"></div>
+
+      <div class="section-title">Team Access</div>
+      <div id="teamAccessBlock">
+        <div class="hint" style="margin-bottom:12px;">Give someone their own login by adding their email and a password for them. Only you, the owner, can see this section.</div>
+        <div id="teamMemberList"></div>
+        <div class="field" style="margin-top:12px;">
+          <label for="newMemberEmail">Their email</label>
+          <input type="email" id="newMemberEmail" placeholder="name@example.com" autocomplete="off">
+        </div>
+        <div class="field">
+          <label for="newMemberPassword">Set a password for them</label>
+          <input type="password" id="newMemberPassword" placeholder="Password" autocomplete="off">
+        </div>
+        <div class="field">
+          <label for="newMemberPasswordConfirm">Confirm password</label>
+          <input type="password" id="newMemberPasswordConfirm" placeholder="Confirm password" autocomplete="off">
+          <div class="hint">8+ characters with uppercase, lowercase, a number, and a special character.</div>
+        </div>
+        <div class="field">
+          <label>What can they do?</label>
+          <label class="checkbox-row"><input type="checkbox" id="permScanSale" checked> Scan sales</label>
+          <label class="checkbox-row"><input type="checkbox" id="permScanInward"> Scan inward / returns</label>
+          <label class="checkbox-row"><input type="checkbox" id="permInventory"> View inventory</label>
+          <label class="checkbox-row"><input type="checkbox" id="permLog"> View sales/inward log</label>
+          <label class="checkbox-row"><input type="checkbox" id="permReport"> View reports</label>
+          <label class="checkbox-row"><input type="checkbox" id="permAdd"> Add new products</label>
+          <div class="hint">They'll only see the tabs you tick here — nothing else, no settings, no other member's data.</div>
+        </div>
+        <button class="btn btn-amber" id="addMemberBtn">Give access</button>
+        <div id="teamAccessFeedback"></div>
+      </div>
+
+      <div id="ownerDangerZone">
+        <div class="section-title">Owner options</div>
+        <button class="btn btn-danger" id="removeLockBtn">Turn off login for everyone</button>
+      </div>
+
+      <div id="loginOffNotice" class="hint" style="display:none;"></div>
+    </section>
+
+    <!-- ADD PRODUCT SCREEN -->
+    <section class="screen" id="screen-add">
+      <div class="section-title">New product</div>
+      <div class="field">
+        <label for="addBarcode">Barcode / SKU</label>
+        <div class="inline-scan-btn">
+          <input type="text" id="addBarcode" placeholder="13-digit EAN barcode" inputmode="numeric" maxlength="13">
+          <button class="btn btn-ghost btn-sm" id="scanForAddBtn">Scan</button>
+        </div>
+        <div id="addReader" style="margin-top:10px;"></div>
+      </div>
+      <div class="field">
+        <label for="addName">Product name</label>
+        <input type="text" id="addName" placeholder="e.g. Cotton Bedsheet - Blue, King">
+      </div>
+      <div class="field">
+        <label for="addThreshold">Low stock alert below</label>
+        <input type="number" id="addThreshold" placeholder="5" inputmode="numeric">
+        <div class="hint">You'll see a warning on Inventory once stock drops below this. New products start at 0 stock — use Inward / Return on the Scan tab to bring stock in.</div>
+      </div>
+      <button class="btn btn-amber" id="saveProductBtn">Save product</button>
+      <div id="addFeedback"></div>
+    </section>
+
+    <!-- REPORT SCREEN -->
+    <section class="screen" id="screen-report">
+      <div class="filter-chips" id="reportRangeChips"></div>
+      <div class="summary-row" id="reportStats"></div>
+      <div class="section-title">By platform</div>
+      <div id="reportByPlatform"></div>
+      <div class="section-title">Top products sold</div>
+      <div id="reportTopProducts"></div>
+      <div class="btn-row" style="margin-top:18px;">
+        <button class="btn btn-outline" id="exportCsvBtn">Export CSV</button>
+        <button class="btn btn-amber" id="sendReportSlackBtn">Send to Slack</button>
+      </div>
+      <div id="reportFeedback"></div>
+    </section>
+
+    <!-- ACCOUNT SCREEN -->
+    <section class="screen" id="screen-account">
+      <div class="section-title">Signed in</div>
+      <div class="account-card">
+        <div class="lock-icon" style="margin:0 0 14px;">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.5-6 8-6s8 2 8 6"/></svg>
+        </div>
+        <div class="account-email mono" id="accountEmail">—</div>
+        <div class="account-role" id="accountRole">—</div>
+        <button class="btn btn-danger" id="logoutBtn" style="margin-top:20px;">Log out</button>
+      </div>
+      <div class="hint" style="margin-top:14px;">Logging out lets someone else on this device sign in with their own email and password.</div>
+
+      <div class="section-title">Your password</div>
+      <div class="field">
+        <label for="curPassword">Current password</label>
+        <input type="password" id="curPassword" placeholder="Current password" autocomplete="off">
+      </div>
+      <div class="field">
+        <label for="newPassword">New password</label>
+        <input type="password" id="newPassword" placeholder="New password" autocomplete="off">
+        <div class="hint">8+ characters with uppercase, lowercase, a number, and a special character.</div>
+      </div>
+      <div class="field">
+        <label for="newPasswordConfirm">Confirm new password</label>
+        <input type="password" id="newPasswordConfirm" placeholder="Confirm new password" autocomplete="off">
+      </div>
+      <button class="btn btn-amber" id="changePasswordBtn">Update my password</button>
+      <div id="lockSettingsFeedback"></div>
+    </section>
+
+  </main>
+
+  <nav class="tabbar">
+    <button class="tab-btn active" data-screen="scan">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2"/><line x1="7" y1="12" x2="17" y2="12"/></svg>
+      Scan
+    </button>
+    <button class="tab-btn" data-screen="inventory">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3h18v18H3z"/><path d="M3 9h18M9 21V9"/></svg>
+      Inventory
+    </button>
+    <button class="tab-btn" data-screen="log">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 8v4l3 3"/><circle cx="12" cy="12" r="9"/></svg>
+      Log
+    </button>
+    <button class="tab-btn" data-screen="report">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 20V10M12 20V4M20 20v-7"/></svg>
+      Report
+    </button>
+    <button class="tab-btn" data-screen="platforms">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="6" cy="6" r="2.5"/><circle cx="18" cy="6" r="2.5"/><circle cx="12" cy="18" r="2.5"/><path d="M8 7.5 16 7.5M7.5 8.5 11 16M16.5 8.5 13 16"/></svg>
+      Platforms
+    </button>
+    <button class="tab-btn" data-screen="add">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+      Add
+    </button>
+    <button class="tab-btn" data-screen="account">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="3.5"/><path d="M5 20c0-3.5 3-5.5 7-5.5s7 2 7 5.5"/></svg>
+      Account
+    </button>
+  </nav>
+
+  <div class="toast" id="toast"></div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
